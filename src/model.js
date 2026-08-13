@@ -1,6 +1,6 @@
 // model.js
 // BNLM: a small decoder-only Transformer, architected to be trained AND
-// run entirely client-side (see ../DESIGN.md for the full rationale).
+// run entirely client-side (see ../BLUEPRINT.md for the full rationale).
 //
 // - Character-level or BPE vocabulary (caller supplies vocabSize)
 // - Weight-tied output projection

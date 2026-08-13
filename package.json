@@ -2,7 +2,7 @@
   "name": "browser-lm",
   "version": "0.1.0",
   "private": true,
-  "description": "BNLM -- a small language model trained and run entirely in the browser (JavaScript + WebGPU/WGSL). See DESIGN.md.",
+  "description": "BNLM -- a small language model trained and run entirely in the browser (JavaScript + WebGPU/WGSL). See BLUEPRINT.md.",
   "type": "module",
   "engines": {
     "node": ">=20"

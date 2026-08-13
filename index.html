@@ -101,11 +101,11 @@
 <div class="viz-root">
 <main>
   <h1>BNLM</h1>
-  <p class="subtitle">A small decoder-only Transformer, trained from random initialization and run entirely client-side — JavaScript + WebGPU (WGSL), no server, no Python. See <a href="./DESIGN.md">DESIGN.md</a> for the architecture writeup.</p>
+  <p class="subtitle">A small decoder-only Transformer, trained from random initialization and run entirely client-side — JavaScript + WebGPU (WGSL), no server, no Python. See <a href="./BLUEPRINT.md">BLUEPRINT.md</a> for the architecture writeup.</p>
 
   <div class="card">
     <h2>1. Training text</h2>
-    <p style="font-size:11px; color:var(--text-muted); margin:0 0 6px;">Separate stories/documents with a blank line (or <code>&lt;|endoftext|&gt;</code>, the real TinyStories dump's separator). Training windows are sampled from within a single story and never cross into the next one — see DESIGN.md.</p>
+    <p style="font-size:11px; color:var(--text-muted); margin:0 0 6px;">Separate stories/documents with a blank line (or <code>&lt;|endoftext|&gt;</code>, the real TinyStories dump's separator). Training windows are sampled from within a single story and never cross into the next one — see BLUEPRINT.md.</p>
     <textarea id="corpus"></textarea>
     <div class="status" id="corpusStats" style="margin-top:6px;"></div>
     <div class="grid">
@@ -125,7 +125,7 @@
         </select>
       </div>
     </div>
-    <p style="font-size:11px; color:var(--text-muted); margin:8px 0 0;">"linear" trades softmax attention for causal linear attention — generation then runs on a recurrent O(1)-memory-per-token path instead of re-scanning the context window each step. See DESIGN.md's "v2" section.</p>
+    <p style="font-size:11px; color:var(--text-muted); margin:8px 0 0;">"linear" trades softmax attention for causal linear attention — generation then runs on a recurrent O(1)-memory-per-token path instead of re-scanning the context window each step. See BLUEPRINT.md's "v2" section.</p>
     <div class="row">
       <button id="initBtn">Initialize / reset model</button>
       <span class="status" id="initStatus"></span>
@@ -149,7 +149,7 @@
       <button id="trainBtn" disabled>Train</button>
       <button id="stopBtn" class="secondary" disabled>Stop</button>
     </div>
-    <p style="font-size:11px; color:var(--text-muted); margin:6px 0 0;">workers &gt; 1: synchronous data-parallel training across N Web Workers, each holding a model replica and computing gradients on its own batch shard (effective batch = batch size × workers), averaged on the main thread each step. The chart then renders via a dedicated OffscreenCanvas worker instead of the main thread (no hover tooltip in that mode — see DESIGN.md). Set back to 1 for the normal single-threaded path.</p>
+    <p style="font-size:11px; color:var(--text-muted); margin:6px 0 0;">workers &gt; 1: synchronous data-parallel training across N Web Workers, each holding a model replica and computing gradients on its own batch shard (effective batch = batch size × workers), averaged on the main thread each step. The chart then renders via a dedicated OffscreenCanvas worker instead of the main thread (no hover tooltip in that mode — see BLUEPRINT.md). Set back to 1 for the normal single-threaded path.</p>
     <div class="chartwrap">
       <canvas id="chart"></canvas>
       <canvas id="chartParallel" style="display:none;"></canvas>

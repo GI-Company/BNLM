@@ -1,5 +1,5 @@
 // worker_pool.js
-// Main-thread coordinator for data-parallel training (see DESIGN.md). Owns
+// Main-thread coordinator for data-parallel training (see BLUEPRINT.md). Owns
 // N Worker replicas (worker_train.js) and one optional chart-rendering
 // Worker (chart_worker.js). This module runs on the main thread -- it's the
 // piece that broadcasts weights out, collects gradients back, averages

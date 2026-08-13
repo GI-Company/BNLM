@@ -22,7 +22,7 @@ import { getBackend, getBackendSync, gpuMatmul, cpuMatmul } from "./webgpu.js";
 // FLOPs, so the threshold is set well above the naive "GPU is always
 // faster" assumption. Tune this down if you raise the model size enough
 // that individual matmuls get large (e.g. vocab or d_model in the
-// thousands) and GPU buffer reuse/pooling (see DESIGN.md future work) would
+// thousands) and GPU buffer reuse/pooling (see BLUEPRINT.md future work) would
 // pay for itself.
 const GPU_FLOP_THRESHOLD = 2_000_000;
 

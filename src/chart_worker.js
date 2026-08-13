@@ -14,7 +14,7 @@
 // worker_pool.js for why that separation exists).
 //
 // No hover/tooltip support here (v1 scoping choice, documented in
-// DESIGN.md) -- that would need the worker to answer "what's the nearest
+// BLUEPRINT.md) -- that would need the worker to answer "what's the nearest
 // point to this mouse x" over another round of postMessage, which isn't
 // worth the complexity for what's already an explicitly-labeled prototype.
 

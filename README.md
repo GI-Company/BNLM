@@ -8,7 +8,7 @@ when your browser supports it. No server, no Python, no build step.
 
 **Try the live demo here:** [https://bnlm.vercel.app](https://bnlm.vercel.app)
 
-See [`DESIGN.md`](./DESIGN.md) for the full architecture writeup and the
+See [`BLUEPRINT.md`](./BLUEPRINT.md) for the full architecture writeup and the
 reasoning behind each design decision.
 
 ## Running it
@@ -38,12 +38,12 @@ Chrome/Edge give you the GPU-accelerated path.
    with a blank line, or paste in a real TinyStories dump (its native
    `<|endoftext|>`-separated format is auto-detected). Training windows are
    sampled from within a single story and never cross into the next one —
-   see `src/dataset.js` and DESIGN.md. Longer, more varied text needs a
+   see `src/dataset.js` and BLUEPRINT.md. Longer, more varied text needs a
    bigger model and more steps; short/repetitive text will memorize quickly,
    which is a good way to sanity-check that training is actually working.
 2. Pick a **mixer**: `attention` (standard causal softmax attention with an O(1) step KV-cache during generation),
    `linear` (causal linear attention — trains in the same O(T) parallel form,
-   but generation then runs on a recurrent path with O(1) memory per token), or `rwkv` (RWKV v4 time-mixing recurrent architecture). See DESIGN.md for architecture specifics.
+   but generation then runs on a recurrent path with O(1) memory per token), or `rwkv` (RWKV v4 time-mixing recurrent architecture). See BLUEPRINT.md for architecture specifics.
 3. Click **Initialize / reset model** to build the tokenizer and a
    freshly-initialized model from the hyperparameters above the button
    (`d_model` must be divisible by `heads`). Set **parallel workers** above 1
@@ -65,7 +65,7 @@ a reload).
 
 ```
 index.html        the demo page (UI + wiring)
-DESIGN.md          architecture write-up and rationale
+BLUEPRINT.md          architecture write-up and rationale
 src/
   tensor.js        reverse-mode autograd engine (the core: matmul, layernorm,
                     softmax, attention primitives, cross-entropy, ...)

@@ -8,7 +8,7 @@
 // to start each step from the exact same weights instead of slowly drifting
 // out of sync the way independently-stepping replicas could.
 //
-// See DESIGN.md's "Worker/MessagePort data parallelism" section for why.
+// See BLUEPRINT.md's "Worker/MessagePort data parallelism" section for why.
 
 import { BNLM } from "./model.js";
 import { crossEntropyLoss } from "./tensor.js";
