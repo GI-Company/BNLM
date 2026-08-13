@@ -6,6 +6,8 @@ tensor/autograd engine, model, tokenizer, optimizer and training loop, plus
 one WGSL compute shader (via WebGPU) that accelerates the biggest matmuls
 when your browser supports it. No server, no Python, no build step.
 
+**Try the live demo here:** [https://bnlm.vercel.app](https://bnlm.vercel.app)
+
 See [`DESIGN.md`](./DESIGN.md) for the full architecture writeup and the
 reasoning behind each design decision.
 
