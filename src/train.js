@@ -51,3 +51,56 @@ export async function trainStep(model, optimizer, data, B, T, rng = Math.random,
   optimizer.step();
   return value;
 }
+
+export class ReplayBuffer {
+  constructor(maxSize) {
+    this.maxSize = maxSize;
+    this.buffer = [];
+    this.pointer = 0;
+  }
+  
+  add(window) {
+    if (this.buffer.length < this.maxSize) {
+      this.buffer.push(window);
+    } else {
+      this.buffer[this.pointer] = window;
+    }
+    this.pointer = (this.pointer + 1) % this.maxSize;
+  }
+
+  sample(rng) {
+    if (this.buffer.length === 0) return null;
+    const idx = Math.floor(rng() * this.buffer.length);
+    return this.buffer[idx];
+  }
+}
+
+export async function onlineStep(model, optimizer, newTokens, replayBuffer, B, T, rng = Math.random, clipNorm = 0) {
+  if (newTokens.length < T + 1) throw new Error("newTokens too short for context length");
+  
+  const input = new Int32Array(B * T);
+  const target = new Int32Array(B * T);
+  
+  for (let b = 0; b < B; b++) {
+    let sourceWindow;
+    if (b === 0 || replayBuffer.buffer.length === 0 || rng() > 0.5) {
+       const start = Math.floor(rng() * (newTokens.length - T));
+       sourceWindow = newTokens.slice(start, start + T + 1);
+    } else {
+       sourceWindow = replayBuffer.sample(rng);
+    }
+    
+    for (let t = 0; t < T; t++) {
+      input[b * T + t] = sourceWindow[t];
+      target[b * T + t] = sourceWindow[t + 1];
+    }
+  }
+
+  model.zeroGrad();
+  const logits = await model.forward(input, B, T);
+  const { loss, value } = crossEntropyLoss(logits, target);
+  await loss.backward();
+  if (clipNorm > 0) clipGradNorm(model.parameters(), clipNorm);
+  optimizer.step();
+  return value;
+}

@@ -94,10 +94,24 @@ export class BNLM {
     this.lnfb = zeros([dModel], true);
   }
 
-  parameters() {
-    const ps = [this.tokEmb, this.lnfg, this.lnfb];
-    if (this.mixerType === "attention") ps.push(this.posEmb);
-    for (const l of this.layers) {
+  freeze(freezeEmbeddings = true, numFrozenLayers = null) {
+    this.freezeEmbeddings = freezeEmbeddings;
+    this.numFrozenLayers = numFrozenLayers ?? Math.max(0, this.numLayers - 1);
+  }
+
+  parameters(unfrozenOnly = false) {
+    const ps = [];
+    if (!unfrozenOnly || !this.freezeEmbeddings) {
+      ps.push(this.tokEmb);
+      if (this.mixerType === "attention") ps.push(this.posEmb);
+    }
+    
+    ps.push(this.lnfg, this.lnfb);
+    
+    const startLayer = (unfrozenOnly && this.numFrozenLayers > 0) ? this.numFrozenLayers : 0;
+    
+    for (let i = startLayer; i < this.layers.length; i++) {
+      const l = this.layers[i];
       ps.push(l.ln1g, l.ln1b, l.Wq, l.bq, l.Wk, l.bk, l.Wv, l.bv, l.Wo, l.bo, l.ln2g, l.ln2b, l.W1, l.b1, l.W2, l.b2);
       if (this.mixerType === "rwkv") ps.push(l.mu_k, l.mu_v, l.mu_r, l.w, l.u, l.Wr, l.br);
     }
@@ -496,6 +510,62 @@ export class BNLM {
   }
 
   /**
+   * Initializes and returns a fresh, empty recurrent state object based on `this.mixerType`.
+   * @returns {Array} A nested array of Float32Arrays representing the layer states.
+   */
+  createEmptyState() {
+    if (this.mixerType === 'linear') {
+      return this.layers.map(() =>
+        Array.from({ length: this.numHeads }, () => ({
+          S: new Float32Array(this.headDim * this.headDim),
+          z: new Float32Array(this.headDim),
+        }))
+      );
+    } else if (this.mixerType === 'rwkv') {
+      return this.layers.map(() => ({
+        x_prev: new Float32Array(this.dModel),
+        num: new Float32Array(this.dModel),
+        den: new Float32Array(this.dModel),
+        max: new Float32Array(this.dModel).fill(-Infinity),
+      }));
+    }
+    throw new Error(`createEmptyState not supported for mixerType: ${this.mixerType}`);
+  }
+
+  /**
+   * Instance-level state management for continuous generation sessions.
+   * Allows the UI to pause, inspect, and resume.
+   */
+  getRecurrentState() {
+    if (!this._currentState) {
+      this._currentState = this.createEmptyState();
+    }
+    return this._currentState;
+  }
+
+  setRecurrentState(state) {
+    this._currentState = state;
+  }
+
+  /**
+   * Advances the recurrent state by exactly one token.
+   * Note: For performance in JS, this mutates `state` in-place rather than deeply 
+   * cloning it every step. It returns the logits for the next token.
+   * 
+   * @param {number} tokenId - The input token ID
+   * @param {Array} state - The current recurrent state (mutated in-place)
+   * @returns {Float32Array} The output logits of shape (vocabSize,)
+   */
+  stepRecurrentToken(tokenId, state) {
+    if (this.mixerType === 'linear') {
+      return this.stepToken(tokenId, state);
+    } else if (this.mixerType === 'rwkv') {
+      return this.stepTokenRWKV(tokenId, state);
+    }
+    throw new Error(`stepRecurrentToken not supported for mixerType: ${this.mixerType}`);
+  }
+
+  /**
    * Pure-numeric (no autograd, no GPU round-trip) token-by-token generation
    * for 'linear'-mixer models: carries one (headDim x headDim) state matrix
    * S and one (headDim,) normalizer z *per head, per layer*, updated
@@ -508,21 +578,16 @@ export class BNLM {
    */
   async generateRecurrent(promptIds, maxNewTokens, { temperature = 0.8, topK = 0, rng = Math.random } = {}) {
     if (promptIds.length === 0) throw new Error("generateRecurrent needs at least one prompt token");
-    const states = this.layers.map(() =>
-      Array.from({ length: this.numHeads }, () => ({
-        S: new Float32Array(this.headDim * this.headDim),
-        z: new Float32Array(this.headDim),
-      }))
-    );
+    const states = this.createEmptyState();
 
     let lastLogits = null;
-    for (const id of promptIds) lastLogits = this.stepToken(id, states);
+    for (const id of promptIds) lastLogits = this.stepRecurrentToken(id, states);
 
     const generated = [];
     for (let i = 0; i < maxNewTokens; i++) {
       const nextId = sampleFromLogits(lastLogits, temperature, topK, rng);
       generated.push(nextId);
-      lastLogits = this.stepToken(nextId, states);
+      lastLogits = this.stepRecurrentToken(nextId, states);
     }
     return generated;
   }
@@ -532,26 +597,16 @@ export class BNLM {
    */
   async generateRecurrentRWKV(promptIds, maxNewTokens, { temperature = 0.8, topK = 0, rng = Math.random } = {}) {
     if (promptIds.length === 0) throw new Error("generateRecurrentRWKV needs at least one prompt token");
-    // RWKV recurrent state per layer:
-    // x_prev: (dModel) - the previous token's input to the mixer
-    // num: (dModel) - running numerator of WKV
-    // den: (dModel) - running denominator of WKV
-    // max: (dModel) - running max exponent for stabilization
-    const states = this.layers.map(() => ({
-      x_prev: new Float32Array(this.dModel),
-      num: new Float32Array(this.dModel),
-      den: new Float32Array(this.dModel),
-      max: new Float32Array(this.dModel).fill(-Infinity),
-    }));
+    const states = this.createEmptyState();
 
     let lastLogits = null;
-    for (const id of promptIds) lastLogits = this.stepTokenRWKV(id, states);
+    for (const id of promptIds) lastLogits = this.stepRecurrentToken(id, states);
 
     const generated = [];
     for (let i = 0; i < maxNewTokens; i++) {
       const nextId = sampleFromLogits(lastLogits, temperature, topK, rng);
       generated.push(nextId);
-      lastLogits = this.stepTokenRWKV(nextId, states);
+      lastLogits = this.stepRecurrentToken(nextId, states);
     }
     return generated;
   }

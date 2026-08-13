@@ -170,7 +170,21 @@
   </div>
 
   <div class="card">
-    <h2>4. Export / Load Quantized Model (Int8)</h2>
+    <h2>4. Continuous Learning (Online Update)</h2>
+    <div class="row">
+      <button id="onlineUpdateBtn" disabled>Online Update on Generated Text</button>
+      <label style="margin:0">steps</label><input type="number" id="onlineSteps" value="10" style="width:60px" />
+      <label style="margin:0">learning rate</label><input type="number" id="onlineLr" value="0.001" step="0.0005" style="width:70px" />
+      <label style="margin:0; display:flex; align-items:center; gap:4px;">
+        <input type="checkbox" id="onlineFreeze" checked> Freeze base model
+      </label>
+      <span class="status" id="onlineStatus"></span>
+    </div>
+    <p style="font-size:11px; color:var(--text-muted); margin:6px 0 0;">Learns the last generated text using a lightweight online update step. Mixes with a tiny replay buffer to avoid forgetting past continuous updates. Freezing the base model protects the early layers/embeddings and keeps updates fast.</p>
+  </div>
+
+  <div class="card">
+    <h2>5. Export / Load Quantized Model (Int8)</h2>
     <div class="row">
       <button id="exportBtn" disabled>Export Int8 Model (.qlm1)</button>
       <input type="file" id="importFile" accept=".qlm1" style="display:none;" />
@@ -221,7 +235,7 @@
 import { CharTokenizer } from "./src/tokenizer.js";
 import { BNLM } from "./src/model.js";
 import { Adam, clipGradNorm } from "./src/optim.js";
-import { trainStep, sampleBatch } from "./src/train.js";
+import { trainStep, sampleBatch, onlineStep, ReplayBuffer } from "./src/train.js";
 import { makeRng } from "./src/tensor.js";
 import { getBackend, gpuMatmul, cpuMatmul } from "./src/webgpu.js";
 import { splitDocuments, tokenizeDocuments, corpusStats, sampleDocBatch } from "./src/dataset.js";
@@ -267,6 +281,8 @@ let model = null, optimizer = null, tokenizer = null, data = null;
 let lossHistory = [];
 let training = false;
 let trainRng = makeRng(1);
+let replayBuffer = null;
+let onlineOptimizer = null;
 let currentConfig = null;
 
 // --- Parallel (data-parallel Web Worker) training state -- see src/worker_pool.js.
@@ -420,6 +436,8 @@ async function initModel() {
   lossHistory = [];
   parallelStepCount = 0;
   trainRng = makeRng(1);
+  replayBuffer = new ReplayBuffer(64);
+  onlineOptimizer = null;
   currentConfig = { mixerType, dModel, numLayers, numHeads, contextLen, numWorkers };
 
   if (pool) { pool.destroy(); pool = null; } // tear down any previous worker pool before possibly making a new one
@@ -450,6 +468,7 @@ async function initModel() {
   $("trainBtn").disabled = false;
   $("genBtn").disabled = false;
   $("exportBtn").disabled = false;
+  $("onlineUpdateBtn").disabled = false;
   log(`Model initialized: mixer=${mixerType}, d_model=${dModel}, layers=${numLayers}, heads=${numHeads}, context=${contextLen}, params=${model.paramCount()}, vocab=${tokenizer.vocabSize}, stories=${stats.numDocuments}, workers=${numWorkers}`);
 }
 
@@ -627,6 +646,68 @@ async function exportQuantized() {
   }
 }
 
+
+
+async function onlineUpdate() {
+  if (!model) return;
+  const promptStr = $("prompt").value || "";
+  const genOutput = $("genOutput").textContent;
+  
+  const textToLearn = genOutput || promptStr;
+  if (!textToLearn) {
+    log("ERROR: No text to learn from. Generate something first.");
+    return;
+  }
+  
+  let newTokens;
+  try {
+    newTokens = tokenizer.encode(textToLearn);
+  } catch(err) {
+    log(`ERROR encoding for online update: ${err.message}`);
+    return;
+  }
+  
+  const T = parseInt($("contextLen").value, 10);
+  if (newTokens.length < T + 1) {
+    log(`ERROR: Not enough text to form a context window of length ${T}.`);
+    return;
+  }
+
+  const steps = parseInt($("onlineSteps").value, 10) || 10;
+  const lr = parseFloat($("onlineLr").value) || 0.001;
+  const freezeBase = $("onlineFreeze").checked;
+  const B = parseInt($("batchSize").value, 10) || 8;
+  
+  model.freeze(freezeBase, freezeBase ? Math.max(0, model.numLayers - 1) : 0);
+  onlineOptimizer = new Adam(model.parameters(true), { lr });
+  
+  $("onlineUpdateBtn").disabled = true;
+  $("onlineStatus").textContent = "Learning...";
+  const t0 = performance.now();
+  let avgLoss = 0;
+  
+  for (let i = 0; i < steps; i++) {
+    const loss = await onlineStep(model, onlineOptimizer, newTokens, replayBuffer, B, T, trainRng, 0);
+    avgLoss += loss;
+    $("onlineStatus").textContent = `Learning... step ${i+1}/${steps} (loss: ${loss.toFixed(4)})`;
+    await new Promise(r => setTimeout(r, 0));
+  }
+  avgLoss /= steps;
+  
+  for (let i=0; i<Math.min(4, newTokens.length - T); i++) {
+     const start = Math.floor(trainRng() * (newTokens.length - T));
+     replayBuffer.add(newTokens.slice(start, start + T + 1));
+  }
+  
+  model.freeze(false, 0);
+  
+  const dt = (performance.now() - t0) / 1000;
+  $("onlineStatus").textContent = `Done! Avg loss: ${avgLoss.toFixed(4)}`;
+  log(`Online update: ${steps} steps, avg loss ${avgLoss.toFixed(4)}, took ${dt.toFixed(2)}s`);
+  
+  $("onlineUpdateBtn").disabled = false;
+}
+
 $("importBtn").addEventListener("click", () => $("importFile").click());
 $("importFile").addEventListener("change", async (e) => {
   const file = e.target.files[0];
@@ -661,6 +742,7 @@ $("initBtn").addEventListener("click", () => { $("initBtn").disabled = true; ini
 $("trainBtn").addEventListener("click", () => trainLoop());
 $("stopBtn").addEventListener("click", () => { training = false; });
 $("genBtn").addEventListener("click", () => generate());
+$("onlineUpdateBtn").addEventListener("click", () => onlineUpdate());
 $("exportBtn").addEventListener("click", () => exportQuantized());
 $("clearHistoryBtn").addEventListener("click", () => { runHistory = []; saveJSON(HISTORY_KEY, runHistory); renderHistory(); });
 $("clearGenHistoryBtn").addEventListener("click", () => { genHistory = []; saveJSON(GEN_HISTORY_KEY, genHistory); renderGenHistory(); });
