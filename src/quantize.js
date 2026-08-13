@@ -101,37 +101,47 @@ export class QuantizedModel {
   }
   
   // Expose same inference methods. We only support recurrent inference.
-  generate(promptIds, maxNewTokens = 50, opts = {}) {
-    // Delegate to BNLM's generation logic but with our step functions
-    const temperature = opts.temperature || 0.0;
-    const topK = opts.topK || 0;
-    const rng = opts.rng || Math.random;
-    
-    let state;
+  createEmptyState() {
     if (this.config.mixerType === "attention") {
-      throw new Error("Quantized attention generation not supported; use KV cache which isn't implemented here yet, or use linear/rwkv.");
+      throw new Error("Quantized attention generation not supported.");
     } else if (this.config.mixerType === "linear") {
-      state = this.qdict.layers.map(() => 
+      return this.qdict.layers.map(() => 
         Array.from({ length: this.numHeads }, () => ({
           S: new Float32Array(this.headDim * this.headDim),
           z: new Float32Array(this.headDim),
         }))
       );
     } else if (this.config.mixerType === "rwkv") {
-      state = this.qdict.layers.map(() => ({
+      return this.qdict.layers.map(() => ({
         x_prev: new Float32Array(this.dModel),
         num: new Float32Array(this.dModel),
         den: new Float32Array(this.dModel),
         max: new Float32Array(this.dModel).fill(-Infinity),
       }));
     }
+  }
+
+  getRecurrentState() {
+    if (!this._currentState) {
+      this._currentState = this.createEmptyState();
+    }
+    return this._currentState;
+  }
+
+  setRecurrentState(state) {
+    this._currentState = state;
+  }
+
+  generate(promptIds, maxNewTokens = 50, opts = {}) {
+    // Delegate to BNLM's generation logic but with our step functions
+    const temperature = opts.temperature || 0.0;
+    const topK = opts.topK || 0;
+    const rng = opts.rng || Math.random;
     
-    const output = [];
-    let lastLogits;
-    
+    let state = this.createEmptyState();
     // Prompt processing
     for (let i = 0; i < promptIds.length; i++) {
-      lastLogits = this.stepToken(promptIds[i], state);
+      lastLogits = this.stepRecurrentToken(promptIds[i], state);
     }
     
     // Generation
@@ -146,11 +156,15 @@ export class QuantizedModel {
         throw new Error("Sampling not implemented in this simple QuantizedModel stub, use BNLM's generator.");
       }
       output.push(nextId);
-      lastLogits = this.stepToken(nextId, state);
+      lastLogits = this.stepRecurrentToken(nextId, state);
     }
     return Int32Array.from(output);
   }
   
+  stepRecurrentToken(tokenId, state) {
+    return this.stepToken(tokenId, state);
+  }
+
   stepToken(tokenId, state) {
     const x = new Float32Array(this.dModel);
     const scale = this.qdict.tokEmb.scales[tokenId];
@@ -207,7 +221,7 @@ export function serializeQuantized(qmodel) {
   const buffers = [];
   let totalLen = 0;
   
-  const meta = { vocabSize: qmodel.vocabSize, config: qmodel.config, tensors: {} };
+  const meta = { version: 1, vocabSize: qmodel.vocabSize, config: qmodel.config, tensors: {} };
   
   function addTensor(name, obj) {
     if (!obj) return;

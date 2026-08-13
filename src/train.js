@@ -73,6 +73,22 @@ export class ReplayBuffer {
     const idx = Math.floor(rng() * this.buffer.length);
     return this.buffer[idx];
   }
+
+  serialize() {
+    return {
+      maxSize: this.maxSize,
+      pointer: this.pointer,
+      buffer: this.buffer.map(arr => Array.from(arr))
+    };
+  }
+
+  deserialize(data) {
+    if (data.maxSize) this.maxSize = data.maxSize;
+    if (data.pointer !== undefined) this.pointer = data.pointer;
+    if (data.buffer) {
+      this.buffer = data.buffer.map(arr => new Int32Array(arr));
+    }
+  }
 }
 
 export async function onlineStep(model, optimizer, newTokens, replayBuffer, B, T, rng = Math.random, clipNorm = 0) {
