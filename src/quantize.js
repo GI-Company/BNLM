@@ -133,32 +133,13 @@ export class QuantizedModel {
   }
 
   generate(promptIds, maxNewTokens = 50, opts = {}) {
-    // Delegate to BNLM's generation logic but with our step functions
-    const temperature = opts.temperature || 0.0;
-    const topK = opts.topK || 0;
-    const rng = opts.rng || Math.random;
-    
-    let state = this.createEmptyState();
-    // Prompt processing
-    for (let i = 0; i < promptIds.length; i++) {
-      lastLogits = this.stepRecurrentToken(promptIds[i], state);
+    if (this.config.mixerType === "linear") {
+      return BNLM.prototype.generateRecurrent.call(this, promptIds, maxNewTokens, opts);
+    } else if (this.config.mixerType === "rwkv") {
+      return BNLM.prototype.generateRecurrentRWKV.call(this, promptIds, maxNewTokens, opts);
+    } else {
+      throw new Error("Quantized attention generation not supported.");
     }
-    
-    // Generation
-    for (let i = 0; i < maxNewTokens; i++) {
-      let nextId;
-      if (temperature === 0) {
-        let maxV = -Infinity;
-        for (let v = 0; v < this.vocabSize; v++) {
-          if (lastLogits[v] > maxV) { maxV = lastLogits[v]; nextId = v; }
-        }
-      } else {
-        throw new Error("Sampling not implemented in this simple QuantizedModel stub, use BNLM's generator.");
-      }
-      output.push(nextId);
-      lastLogits = this.stepRecurrentToken(nextId, state);
-    }
-    return Int32Array.from(output);
   }
   
   stepRecurrentToken(tokenId, state) {

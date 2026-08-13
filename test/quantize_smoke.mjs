@@ -36,7 +36,7 @@ const floatGen = Array.from(await model.generate(promptIds, 15, { temperature: 0
 
 // Quantize
 const qmodel = quantizeModel(model);
-const quantGen = Array.from(qmodel.generate(promptIds, 15, { temperature: 0 }));
+const quantGen = Array.from(await qmodel.generate(promptIds, 15, { temperature: 0 }));
 
 let matches = 0;
 for (let i = 0; i < floatGen.length; i++) {
@@ -54,12 +54,12 @@ const qbuf = serializeQuantized(qmodel);
 const qmodel2 = deserializeQuantized(qbuf);
 
 // Verify exact equality of loaded quantized model
-const quantGen2 = Array.from(qmodel2.generate(promptIds, 15, { temperature: 0 }));
+const quantGen2 = Array.from(await qmodel2.generate(promptIds, 15, { temperature: 0 }));
 
 let exactMatch = true;
 for (let i = 0; i < quantGen.length; i++) {
   if (quantGen[i] !== quantGen2[i]) exactMatch = false;
 }
-assert(exactMatch, "Deserialized model produced different tokens than the original quantized model.");
+assert(exactMatch, "Deserialized model does not match in-memory quantized model.");
 
 console.log("\nAll quantize smoke tests passed: Int8 inference is accurate and serialization round-trips perfectly.");
