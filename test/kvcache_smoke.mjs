@@ -11,7 +11,7 @@
 //     error and is the maximum valid generation for that prompt.
 
 import { CharTokenizer } from "../src/tokenizer.js";
-import { MicroLM } from "../src/model.js";
+import { BNLM } from "../src/model.js";
 import { makeRng } from "../src/tensor.js";
 
 function assert(cond, msg) {
@@ -21,7 +21,7 @@ function assert(cond, msg) {
 const text = "the quick brown fox jumps over the lazy dog. she sells seashells by the sea.";
 const tokenizer = new CharTokenizer(text);
 
-const model = new MicroLM(tokenizer.vocabSize, {
+const model = new BNLM(tokenizer.vocabSize, {
   dModel: 32, numLayers: 2, numHeads: 2, contextLen: 24, seed: 42, mixerType: "attention",
 });
 

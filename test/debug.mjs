@@ -1,6 +1,6 @@
-import { MicroLM } from "../src/model.js";
+import { BNLM } from "../src/model.js";
 import { makeRng, Tensor } from "../src/tensor.js";
-const model = new MicroLM(100, { dModel: 32, numLayers: 2, numHeads: 1, contextLen: 32, seed: 42, mixerType: "rwkv" });
+const model = new BNLM(100, { dModel: 32, numLayers: 2, numHeads: 1, contextLen: 32, seed: 42, mixerType: "rwkv" });
 const promptIds = Array.from({length: 4}, (_, i) => i);
 
 // Let's check intermediate values

@@ -11,7 +11,7 @@
 // Run with: node test/linear_mixer_smoke.mjs
 
 import { CharTokenizer } from "../src/tokenizer.js";
-import { MicroLM } from "../src/model.js";
+import { BNLM } from "../src/model.js";
 import { Adam } from "../src/optim.js";
 import { trainStep } from "../src/train.js";
 import { makeRng } from "../src/tensor.js";
@@ -19,7 +19,7 @@ import { makeRng } from "../src/tensor.js";
 async function checkRecurrentMatchesBatched() {
   const text = "the quick brown fox jumps over the lazy dog. she sells seashells by the sea.";
   const tokenizer = new CharTokenizer(text);
-  const model = new MicroLM(tokenizer.vocabSize, {
+  const model = new BNLM(tokenizer.vocabSize, {
     dModel: 24, numLayers: 2, numHeads: 3, contextLen: 40, seed: 3, mixerType: "linear",
   });
   const ids = Array.from(tokenizer.encode(text.slice(0, 20)));
@@ -69,7 +69,7 @@ async function checkTrains() {
   const tokenizer = new CharTokenizer(corpus);
   const data = tokenizer.encode(corpus);
 
-  const model = new MicroLM(tokenizer.vocabSize, {
+  const model = new BNLM(tokenizer.vocabSize, {
     dModel: 32, numLayers: 2, numHeads: 2, contextLen: 32, seed: 11, mixerType: "linear",
   });
   const optimizer = new Adam(model.parameters(), { lr: 5e-3 });

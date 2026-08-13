@@ -27,7 +27,7 @@ async function main() {
   await page.goto("http://localhost:8000/index.html", { waitUntil: "load" });
 
   const result = await page.evaluate(async () => {
-    const { MicroLM } = await import("./src/model.js");
+    const { BNLM } = await import("./src/model.js");
     const { Adam } = await import("./src/optim.js");
     const { trainStep, sampleBatch } = await import("./src/train.js");
     const { makeRng, crossEntropyLoss } = await import("./src/tensor.js");
@@ -42,7 +42,7 @@ async function main() {
     const NUM_STEPS = 15;
 
     // --- Path A: direct trainStep, no workers ---
-    const modelA = new MicroLM(tokenizer.vocabSize, config);
+    const modelA = new BNLM(tokenizer.vocabSize, config);
     const optA = new Adam(modelA.parameters(), { lr: 3e-3 });
     const rngA = makeRng(123);
     const lossesA = [];
@@ -51,12 +51,12 @@ async function main() {
     // --- Path B: TrainingWorkerPool with numWorkers=1, identical starting
     // weights (copied explicitly) and identical batch sequence (separate but
     // identically-seeded rng) ---
-    const modelB = new MicroLM(tokenizer.vocabSize, config);
+    const modelB = new BNLM(tokenizer.vocabSize, config);
     const paramsA0 = modelA.parameters(); // NOTE: modelA has already been trained 15 steps above; we need its *initial* weights instead
     // Re-create modelA's initial state by constructing a fresh third instance
     // with the same seed (deterministic init) so both A's replay and B start
     // from truly identical weights.
-    const modelA0 = new MicroLM(tokenizer.vocabSize, config);
+    const modelA0 = new BNLM(tokenizer.vocabSize, config);
     const paramsB = modelB.parameters();
     const paramsA0List = modelA0.parameters();
     for (let i = 0; i < paramsB.length; i++) paramsB[i].data.set(paramsA0List[i].data);
@@ -76,10 +76,10 @@ async function main() {
 
     // --- Path A': redo path A's training from a matching fresh instance so
     // both trajectories were computed from truly identical starting weights
-    // (modelA above shared config but MicroLM's internal RNG consumption
+    // (modelA above shared config but BNLM's internal RNG consumption
     // order must match modelA0 exactly since both used the same seed and no
     // other randomness was drawn in between). ---
-    const modelA2 = new MicroLM(tokenizer.vocabSize, config);
+    const modelA2 = new BNLM(tokenizer.vocabSize, config);
     const optA2 = new Adam(modelA2.parameters(), { lr: 3e-3 });
     const rngA2 = makeRng(123);
     const lossesA2 = [];

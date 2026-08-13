@@ -1,6 +1,6 @@
 // worker_train.js
 // Runs inside a dedicated Web Worker (loaded as an ES module). Holds one
-// MicroLM replica whose weights are overwritten from the main thread before
+// BNLM replica whose weights are overwritten from the main thread before
 // every step, computes forward + backward on whatever batch it's handed,
 // and posts the resulting gradients back. It never runs an optimizer step
 // itself -- averaging gradients across workers and applying the update is
@@ -10,7 +10,7 @@
 //
 // See DESIGN.md's "Worker/MessagePort data parallelism" section for why.
 
-import { MicroLM } from "./model.js";
+import { BNLM } from "./model.js";
 import { crossEntropyLoss } from "./tensor.js";
 
 let model = null;
@@ -23,7 +23,7 @@ self.onmessage = async (e) => {
     // coordinator before the first step. What matters is that vocabSize/
     // config exactly match the main thread's model, so parameters() lines
     // up shape-for-shape and index-for-index between the two.
-    model = new MicroLM(msg.vocabSize, msg.config);
+    model = new BNLM(msg.vocabSize, msg.config);
     self.postMessage({ type: "ready" });
     return;
   }

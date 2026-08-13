@@ -1,4 +1,4 @@
-// End-to-end smoke test: tokenize a tiny corpus, train MicroLM for a few
+// End-to-end smoke test: tokenize a tiny corpus, train BNLM for a few
 // hundred steps on the CPU fallback path (Node has no navigator.gpu, so this
 // exercises exactly the same code path a browser without WebGPU would use),
 // and confirm loss trends down and generation produces something non-random.
@@ -6,7 +6,7 @@
 // Run with: node test/train_smoke.mjs
 
 import { CharTokenizer } from "../src/tokenizer.js";
-import { MicroLM } from "../src/model.js";
+import { BNLM } from "../src/model.js";
 import { Adam } from "../src/optim.js";
 import { trainStep, sampleBatch } from "../src/train.js";
 import { crossEntropyLoss } from "../src/tensor.js";
@@ -23,7 +23,7 @@ console.log(`corpus length ${corpus.length}, vocab size ${tokenizer.vocabSize}`)
 
 for (const mixerType of ["attention", "linear", "rwkv"]) {
   console.log(`\n=== Testing ${mixerType} mixer ===`);
-  const model = new MicroLM(tokenizer.vocabSize, {
+  const model = new BNLM(tokenizer.vocabSize, {
     dModel: 32, numLayers: 2, numHeads: 2, contextLen: 32, seed: 7, mixerType,
   });
   console.log(`model param count: ${model.paramCount()}`);

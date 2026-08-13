@@ -2,7 +2,7 @@
 // Run with: node test/rwkv_smoke.mjs
 
 import { CharTokenizer } from "../src/tokenizer.js";
-import { MicroLM } from "../src/model.js";
+import { BNLM } from "../src/model.js";
 
 function assert(cond, msg) {
   if (!cond) { console.error(`FAIL: ${msg}`); process.exit(1); }
@@ -11,7 +11,7 @@ function assert(cond, msg) {
 const text = "the quick brown fox jumps over the lazy dog. she sells seashells by the sea.";
 const tokenizer = new CharTokenizer(text);
 
-const model = new MicroLM(tokenizer.vocabSize, {
+const model = new BNLM(tokenizer.vocabSize, {
   dModel: 32, numLayers: 2, numHeads: 1, contextLen: 24, seed: 42, mixerType: "rwkv",
 });
 

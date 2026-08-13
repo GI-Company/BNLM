@@ -1,7 +1,7 @@
 // src/quantize.js
 // Post-training int8 symmetric quantization for inference.
 
-import { MicroLM } from "./model.js";
+import { BNLM } from "./model.js";
 
 // Symmetric per-row quantization
 function quantizeTensor(tensor) {
@@ -102,7 +102,7 @@ export class QuantizedModel {
   
   // Expose same inference methods. We only support recurrent inference.
   generate(promptIds, maxNewTokens = 50, opts = {}) {
-    // Delegate to MicroLM's generation logic but with our step functions
+    // Delegate to BNLM's generation logic but with our step functions
     const temperature = opts.temperature || 0.0;
     const topK = opts.topK || 0;
     const rng = opts.rng || Math.random;
@@ -143,7 +143,7 @@ export class QuantizedModel {
           if (lastLogits[v] > maxV) { maxV = lastLogits[v]; nextId = v; }
         }
       } else {
-        throw new Error("Sampling not implemented in this simple QuantizedModel stub, use MicroLM's generator.");
+        throw new Error("Sampling not implemented in this simple QuantizedModel stub, use BNLM's generator.");
       }
       output.push(nextId);
       lastLogits = this.stepToken(nextId, state);
@@ -187,10 +187,10 @@ export class QuantizedModel {
       }),
       lnfg: this.qdict.lnfg,
       lnfb: this.qdict.lnfb,
-      linearMixerStep: MicroLM.prototype.linearMixerStep,
-      rwkvMixerStep: MicroLM.prototype.rwkvMixerStep,
-      stepToken: MicroLM.prototype.stepToken,
-      stepTokenRWKV: MicroLM.prototype.stepTokenRWKV,
+      linearMixerStep: BNLM.prototype.linearMixerStep,
+      rwkvMixerStep: BNLM.prototype.rwkvMixerStep,
+      stepToken: BNLM.prototype.stepToken,
+      stepTokenRWKV: BNLM.prototype.stepTokenRWKV,
     };
     
     dequantizeTensor(this.qdict.tokEmb, mockModel.tokEmb.data);

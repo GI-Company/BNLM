@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>MicroLM — a language model trained entirely in your browser</title>
+<title>BNLM — a language model trained entirely in your browser</title>
 <style>
   .viz-root {
     color-scheme: light;
@@ -100,7 +100,7 @@
 <body>
 <div class="viz-root">
 <main>
-  <h1>MicroLM</h1>
+  <h1>BNLM</h1>
   <p class="subtitle">A small decoder-only Transformer, trained from random initialization and run entirely client-side — JavaScript + WebGPU (WGSL), no server, no Python. See <a href="./DESIGN.md">DESIGN.md</a> for the architecture writeup.</p>
 
   <div class="card">
@@ -219,7 +219,7 @@
 
 <script type="module">
 import { CharTokenizer } from "./src/tokenizer.js";
-import { MicroLM } from "./src/model.js";
+import { BNLM } from "./src/model.js";
 import { Adam, clipGradNorm } from "./src/optim.js";
 import { trainStep, sampleBatch } from "./src/train.js";
 import { makeRng } from "./src/tensor.js";
@@ -297,8 +297,8 @@ function readChartTheme() {
 // the live status line / chart above, which only ever shows the *current*
 // run's state. Lets you compare mixer types / hyperparameters across
 // multiple init+train+generate cycles instead of losing each one. ---
-const HISTORY_KEY = "microlm_runHistory";
-const GEN_HISTORY_KEY = "microlm_genHistory";
+const HISTORY_KEY = "bnlm_runHistory";
+const GEN_HISTORY_KEY = "bnlm_genHistory";
 const MAX_HISTORY = 100;
 
 function loadJSON(key) {
@@ -415,7 +415,7 @@ async function initModel() {
   }
 
   const config = { dModel, numLayers, numHeads, contextLen, mixerType, seed: Date.now() & 0xffff };
-  model = new MicroLM(tokenizer.vocabSize, config);
+  model = new BNLM(tokenizer.vocabSize, config);
   optimizer = new Adam(model.parameters(), { lr: parseFloat($("lr").value) });
   lossHistory = [];
   parallelStepCount = 0;
@@ -614,7 +614,7 @@ async function exportQuantized() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `microlm_${currentConfig.mixerType}_d${currentConfig.dModel}_l${currentConfig.numLayers}.qlm1`;
+    a.download = `bnlm_${currentConfig.mixerType}_d${currentConfig.dModel}_l${currentConfig.numLayers}.qlm1`;
     a.click();
     URL.revokeObjectURL(url);
     $("quantStatus").textContent = "Exported!";

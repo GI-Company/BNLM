@@ -1,5 +1,5 @@
 // model.js
-// MicroLM: a small decoder-only Transformer, architected to be trained AND
+// BNLM: a small decoder-only Transformer, architected to be trained AND
 // run entirely client-side (see ../DESIGN.md for the full rationale).
 //
 // - Character-level or BPE vocabulary (caller supplies vocabSize)
@@ -34,7 +34,7 @@ import {
   GELU_C1, GELU_C2,
 } from "./tensor.js";
 
-export class MicroLM {
+export class BNLM {
   /**
    * @param {number} vocabSize
    * @param {{dModel:number, numLayers:number, numHeads:number, contextLen:number, mlpRatio?:number, seed?:number, mixerType?:'attention'|'linear'|'rwkv'}} config

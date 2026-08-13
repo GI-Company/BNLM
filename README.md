@@ -1,4 +1,4 @@
-# MicroLM — a language model trained entirely in your browser
+# BNLM — a language model trained entirely in your browser
 
 A small decoder-only Transformer that is initialized, trained, and run for
 inference **entirely client-side**: JavaScript (ES modules) for the
@@ -70,7 +70,7 @@ src/
   tensor.js        reverse-mode autograd engine (the core: matmul, layernorm,
                     softmax, attention primitives, cross-entropy, ...)
   webgpu.js         the one WGSL matmul compute shader + CPU fallback
-  model.js          MicroLM: embeddings, transformer blocks (attention,
+  model.js          BNLM: embeddings, transformer blocks (attention,
                     linear-mixer, or RWKV), generate(), generateRecurrent()
   tokenizer.js      character-level tokenizer
   bpe_tokenizer.js  Byte-Pair Encoding tokenizer

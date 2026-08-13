@@ -26,7 +26,7 @@ function rwkvMixerE2E() {
     Wo: randTensor([dModel, dModel], 1, true, makeRng(112)),
     bo: randTensor([dModel], 1, true, makeRng(113)),
   };
-  const mockModel = { dModel, rwkvMixer: MicroLM.prototype.rwkvMixer };
+  const mockModel = { dModel, rwkvMixer: BNLM.prototype.rwkvMixer };
   return {
     name: "rwkvMixer(e2e)",
     inputs: [x, layer.mu_k, layer.mu_v, layer.mu_r, layer.w, layer.u, layer.Wr, layer.br, layer.Wk, layer.bk, layer.Wv, layer.bv, layer.Wo, layer.bo],
@@ -305,8 +305,8 @@ async function main() {
     const Wo = T([D, D]), bo = T([D]);
     
     // We import the mock model methods but we don't have them in gradcheck.mjs directly.
-    // Wait, MicroLM is not imported in gradcheck.mjs. It tests primitives.
-    // Let me just import MicroLM and use its rwkvMixer.
+    // Wait, BNLM is not imported in gradcheck.mjs. It tests primitives.
+    // Let me just import BNLM and use its rwkvMixer.
     // Actually, I can just not test it here since it's already tested by smoke test!
     // Let's just run npm test.
   }

@@ -2,7 +2,7 @@
 // Run with: node test/quantize_smoke.mjs
 
 import { CharTokenizer } from "../src/tokenizer.js";
-import { MicroLM } from "../src/model.js";
+import { BNLM } from "../src/model.js";
 import { Adam } from "../src/optim.js";
 import { trainStep } from "../src/train.js";
 import { makeRng } from "../src/tensor.js";
@@ -16,7 +16,7 @@ const corpus = "the quick brown fox jumps over the lazy dog. she sells seashells
 const tokenizer = new CharTokenizer(corpus);
 const data = tokenizer.encode(corpus);
 
-const model = new MicroLM(tokenizer.vocabSize, {
+const model = new BNLM(tokenizer.vocabSize, {
   dModel: 32, numLayers: 2, numHeads: 2, contextLen: 24, seed: 42, mixerType: "linear",
 });
 

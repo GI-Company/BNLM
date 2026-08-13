@@ -1,4 +1,4 @@
-# MicroLM: A Language Model Architecture for Training and Inference Entirely In-Browser
+# BNLM: A Language Model Architecture for Training and Inference Entirely In-Browser
 
 ## Goal
 
@@ -172,7 +172,7 @@ that are gradient-checked the same way — see `test/gradcheck.mjs`.
 form used during training is mathematically equivalent to a *recurrent* form:
 for each head, maintain a running `(headDim × headDim)` state matrix `S` and
 a `(headDim,)` normalizer `z`; each new token updates them in O(headDim²)
-and reads off that token's output — no re-scan of history. `MicroLM.
+and reads off that token's output — no re-scan of history. `BNLM.
 generateRecurrent()` implements exactly this as a small pure-numeric routine
 (deliberately *not* built on the autograd `Tensor` graph — there's nothing to
 differentiate at inference time, so a plain synchronous loop over
@@ -241,7 +241,7 @@ model/tensor code itself was needed, since it has no dependency on which
 thread calls it.
 
 **How it works.** `TrainingWorkerPool` (main thread) owns N `Worker`
-replicas, each running `worker_train.js` with its own `MicroLM` instance.
+replicas, each running `worker_train.js` with its own `BNLM` instance.
 Each step: the coordinator broadcasts the canonical model's *current*
 weights to every worker along with one independently-sampled batch per
 worker (so the effective batch size scales with worker count); each worker
