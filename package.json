@@ -1,0 +1,18 @@
+{
+  "name": "browser-lm",
+  "version": "0.1.0",
+  "private": true,
+  "description": "MicroLM -- a small language model trained and run entirely in the browser (JavaScript + WebGPU/WGSL). See DESIGN.md.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "for f in test/gradcheck.mjs test/train_smoke.mjs test/linear_mixer_smoke.mjs test/dataset_smoke.mjs test/optim_smoke.mjs test/bpe_smoke.mjs test/kvcache_smoke.mjs test/rwkv_smoke.mjs; do node \"$f\" || exit 1; done",
+    "test:e2e": "for f in test/e2e_playwright*.mjs; do node \"$f\" || exit 1; done",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.40.0"
+  }
+}

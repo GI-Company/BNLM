@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>MicroLM — a language model trained entirely in your browser</title>
+<style>
+  .viz-root {
+    color-scheme: light;
+    --surface-1:      #fcfcfb;
+    --page:           #f9f9f7;
+    --text-primary:   #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --grid:           #e1e0d9;
+    --baseline:       #c3c2b7;
+    --series-1:       #2a78d6;
+    --border:         rgba(11,11,11,0.10);
+    --good:           #0ca30c;
+  }
+  @media (prefers-color-scheme: dark) {
+    .viz-root {
+      color-scheme: dark;
+      --surface-1:      #1a1a19;
+      --page:           #0d0d0d;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --grid:           #2c2c2a;
+      --baseline:       #383835;
+      --series-1:       #3987e5;
+      --border:         rgba(255,255,255,0.10);
+      --good:           #0ca30c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--text-primary);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 24px 20px 64px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .subtitle { color: var(--text-secondary); font-size: 14px; margin: 0 0 20px; }
+  .card {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .card h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); margin: 0 0 12px; }
+  textarea {
+    width: 100%; min-height: 110px; resize: vertical;
+    background: var(--page); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px;
+    font-family: inherit; font-size: 13px; line-height: 1.5;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 12px; }
+  label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 3px; }
+  input[type=number] {
+    width: 100%; background: var(--page); color: var(--text-primary);
+    border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+  button {
+    background: var(--series-1); color: white; border: none; border-radius: 6px;
+    padding: 8px 14px; font-size: 13px; cursor: pointer; font-weight: 600;
+  }
+  button.secondary { background: transparent; color: var(--text-primary); border: 1px solid var(--border); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .status { font-size: 12px; color: var(--text-secondary); margin-top: 10px; white-space: pre-wrap; font-family: ui-monospace, monospace; }
+  .statline { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--text-secondary); }
+  .statline b { color: var(--text-primary); }
+  #chart, #chartParallel { width: 100%; height: 180px; display: block; }
+  #genOutput {
+    background: var(--page); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px; font-family: ui-monospace, monospace; font-size: 13px; white-space: pre-wrap;
+    min-height: 60px;
+  }
+  table.resultsTable { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.resultsTable th, table.resultsTable td {
+    text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+  }
+  table.resultsTable th { color: var(--text-muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; }
+  table.resultsTable tbody tr:last-child td { font-weight: 600; color: var(--text-primary); }
+  .tableWrap { max-height: 220px; overflow-y: auto; border: 1px solid var(--border); border-radius: 6px; }
+  .emptyNote { font-size: 12px; color: var(--text-muted); padding: 10px; }
+  .tooltip {
+    position: absolute; pointer-events: none; background: var(--text-primary); color: var(--surface-1);
+    font-size: 11px; padding: 3px 7px; border-radius: 4px; transform: translate(-50%, -130%);
+    white-space: nowrap; opacity: 0; transition: opacity .1s;
+  }
+  .chartwrap { position: relative; }
+  a { color: var(--series-1); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<main>
+  <h1>MicroLM</h1>
+  <p class="subtitle">A small decoder-only Transformer, trained from random initialization and run entirely client-side — JavaScript + WebGPU (WGSL), no server, no Python. See <a href="./DESIGN.md">DESIGN.md</a> for the architecture writeup.</p>
+
+  <div class="card">
+    <h2>1. Training text</h2>
+    <p style="font-size:11px; color:var(--text-muted); margin:0 0 6px;">Separate stories/documents with a blank line (or <code>&lt;|endoftext|&gt;</code>, the real TinyStories dump's separator). Training windows are sampled from within a single story and never cross into the next one — see DESIGN.md.</p>
+    <textarea id="corpus"></textarea>
+    <div class="status" id="corpusStats" style="margin-top:6px;"></div>
+    <div class="grid">
+      <div><label for="dModel">d_model</label><input type="number" id="dModel" value="48" /></div>
+      <div><label for="numLayers">layers</label><input type="number" id="numLayers" value="3" /></div>
+      <div><label for="numHeads">heads</label><input type="number" id="numHeads" value="4" /></div>
+      <div><label for="contextLen">context length</label><input type="number" id="contextLen" value="48" /></div>
+      <div><label for="batchSize">batch size</label><input type="number" id="batchSize" value="8" /></div>
+      <div><label for="lr">learning rate</label><input type="number" id="lr" value="0.003" step="0.001" /></div>
+      <div><label for="gradClip">grad clip (0=off)</label><input type="number" id="gradClip" value="0" step="0.1" min="0" /></div>
+      <div>
+        <label>Mixer:</label>
+        <select id="mixerType" title="Which sequence mixer to use.">
+          <option value="attention">Softmax Attention</option>
+          <option value="linear">Linear Causal</option>
+          <option value="rwkv">RWKV v4</option>
+        </select>
+      </div>
+    </div>
+    <p style="font-size:11px; color:var(--text-muted); margin:8px 0 0;">"linear" trades softmax attention for causal linear attention — generation then runs on a recurrent O(1)-memory-per-token path instead of re-scanning the context window each step. See DESIGN.md's "v2" section.</p>
+    <div class="row">
+      <button id="initBtn">Initialize / reset model</button>
+      <span class="status" id="initStatus"></span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2. Train (entirely in this tab)</h2>
+    <div class="statline">
+      <span>Backend: <b id="backendLabel">—</b></span>
+      <span>Params: <b id="paramCount">—</b></span>
+      <span>Vocab: <b id="vocabSize">—</b></span>
+      <span>Step: <b id="stepLabel">0</b></span>
+      <span>Loss: <b id="lossLabel">—</b></span>
+    </div>
+    <div class="row">
+      <label style="margin:0" for="stepsPerClick">steps</label>
+      <input type="number" id="stepsPerClick" value="200" style="width:80px" />
+      <label style="margin:0" for="numWorkers">parallel workers</label>
+      <input type="number" id="numWorkers" value="1" min="1" max="8" style="width:60px" />
+      <button id="trainBtn" disabled>Train</button>
+      <button id="stopBtn" class="secondary" disabled>Stop</button>
+    </div>
+    <p style="font-size:11px; color:var(--text-muted); margin:6px 0 0;">workers &gt; 1: synchronous data-parallel training across N Web Workers, each holding a model replica and computing gradients on its own batch shard (effective batch = batch size × workers), averaged on the main thread each step. The chart then renders via a dedicated OffscreenCanvas worker instead of the main thread (no hover tooltip in that mode — see DESIGN.md). Set back to 1 for the normal single-threaded path.</p>
+    <div class="chartwrap">
+      <canvas id="chart"></canvas>
+      <canvas id="chartParallel" style="display:none;"></canvas>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>3. Generate</h2>
+    <div class="row">
+      <input type="text" id="prompt" placeholder="prompt text (must use only characters seen in training text)" style="flex:1; min-width:220px; background:var(--page); color:var(--text-primary); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font-size:13px;" />
+      <label style="margin:0">tokens</label><input type="number" id="genTokens" value="120" style="width:70px" />
+      <label style="margin:0">temp</label><input type="number" id="temp" value="0.7" step="0.1" style="width:60px" />
+      <label style="margin:0">top-k</label><input type="number" id="topK" value="8" style="width:60px" />
+      <button id="genBtn" disabled>Generate</button>
+    </div>
+    <div id="genOutput" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>4. Export / Load Quantized Model (Int8)</h2>
+    <div class="row">
+      <button id="exportBtn" disabled>Export Int8 Model (.qlm1)</button>
+      <input type="file" id="importFile" accept=".qlm1" style="display:none;" />
+      <button id="importBtn" class="secondary">Load Int8 Model</button>
+      <span class="status" id="quantStatus"></span>
+    </div>
+    <p style="font-size:11px; color:var(--text-muted); margin:6px 0 0;">Exports a dynamically quantized Int8 inference-only version of the model. Loads directly into memory without retraining. Tokenizer vocabulary must match the one used during training.</p>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-top:0; justify-content: space-between;">
+      <h2 style="margin:0;">Run history <span style="text-transform:none; letter-spacing:0;">(saved across reloads)</span></h2>
+      <button id="clearHistoryBtn" class="secondary" style="padding:4px 10px; font-size:11px;">Clear</button>
+    </div>
+    <div class="tableWrap">
+      <table class="resultsTable" id="historyTable">
+        <thead><tr>
+          <th>Time</th><th>Mixer</th><th>Config</th><th>Params</th><th>Steps</th><th>Final loss</th><th>Duration</th>
+        </tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+      <div class="emptyNote" id="historyEmptyNote">No training runs logged yet — results appear here each time a training run finishes.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="row" style="margin-top:0; justify-content: space-between;">
+      <h2 style="margin:0;">Generation log</h2>
+      <button id="clearGenHistoryBtn" class="secondary" style="padding:4px 10px; font-size:11px;">Clear</button>
+    </div>
+    <div class="tableWrap">
+      <table class="resultsTable" id="genHistoryTable">
+        <thead><tr><th>Time</th><th>Mixer</th><th>Prompt</th><th>Output</th></tr></thead>
+        <tbody id="genHistoryBody"></tbody>
+      </table>
+      <div class="emptyNote" id="genHistoryEmptyNote">No generations logged yet.</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Log</h2>
+    <div class="status" id="log"></div>
+  </div>
+</main>
+</div>
+
+<script type="module">
+import { CharTokenizer } from "./src/tokenizer.js";
+import { MicroLM } from "./src/model.js";
+import { Adam, clipGradNorm } from "./src/optim.js";
+import { trainStep, sampleBatch } from "./src/train.js";
+import { makeRng } from "./src/tensor.js";
+import { getBackend, gpuMatmul, cpuMatmul } from "./src/webgpu.js";
+import { splitDocuments, tokenizeDocuments, corpusStats, sampleDocBatch } from "./src/dataset.js";
+import { TrainingWorkerPool, ChartWorkerHandle } from "./src/worker_pool.js";
+import { drawLossChart } from "./src/chart_utils.js";
+import { quantizeModel, serializeQuantized, deserializeQuantized } from "./src/quantize.js";
+
+// Original short stories written in the TinyStories style (short sentences,
+// small vocabulary, simple narrative arc) -- NOT verbatim excerpts from the
+// actual TinyStories dataset (https://huggingface.co/datasets/roneneldan/TinyStories).
+// TinyStories is widely used as a benchmark corpus specifically *because* small
+// models can learn coherent output from it, which is exactly the property this
+// demo wants from its bundled example text. Blank lines separate stories --
+// see src/dataset.js: training windows are sampled within a single story and
+// never cross into the next one. Paste in real TinyStories text (plain,
+// blank-line- or `<|endoftext|>`-separated) here to train on the real thing.
+const DEFAULT_CORPUS = `Once upon a time, there was a little girl named Lily. Lily loved to look for pretty rocks in her yard. One day she found a rock that sparkled like a star. She ran inside to show her mom. "Look what I found!" she said. Her mom smiled and put the rock on the windowsill, where it sparkled every morning.
+
+Once upon a time, there was a small dog named Beep. Beep loved to run fast in the park. One day, Beep saw a red ball under a bush. Beep wanted the ball very much. Beep pulled and pulled until the ball popped out. Beep was so happy that he ran around the park three times.
+
+Once upon a time, there was a little boy named Sam. Sam had a blue kite. On a windy day, Sam took his kite to the hill. He let the string go and the kite flew high into the sky. Sam laughed and ran across the grass. When it was time to go home, the kite came down slowly into his hands.
+
+Once upon a time, there was a kind cat named Milo. Milo lived in a small house with a girl named Ana. Every night, Milo curled up next to Ana and purred softly. One night it was very cold. Ana gave Milo a warm blanket. Milo was happy and slept all night long.
+
+Once upon a time, there was a little fish named Fin. Fin lived in a blue pond. Fin was scared of the big frog who lived by the rocks. One day the frog helped Fin find his way home when he got lost. After that, Fin and the frog became good friends and played together every day.
+
+Once upon a time, there was a boy named Max who had a red bike. Max wanted to ride to the top of the big hill. It was hard, and Max was tired. He kept pushing and did not stop. When he reached the top, he could see the whole town. Max smiled and felt very proud.
+
+Once upon a time, there was a little girl named Beth. Beth had a garden with yellow flowers. Every morning, she watered the flowers with her small can. One day, a bee landed on a flower and Beth watched it quietly. The bee flew from flower to flower, and Beth was happy her garden helped the bee.
+
+Once upon a time, there was a boy named Leo who liked to build towers with blocks. One day his tower fell down with a crash. Leo felt sad, but his sister said, "Let's build it together." They stacked the blocks again, higher than before, and this time the tower did not fall.`;
+
+const $ = (id) => document.getElementById(id);
+$("corpus").value = DEFAULT_CORPUS;
+
+function log(msg) {
+  const el = $("log");
+  el.textContent += `${new Date().toLocaleTimeString()}  ${msg}\n`;
+  el.scrollTop = el.scrollHeight;
+}
+
+let model = null, optimizer = null, tokenizer = null, data = null;
+let lossHistory = [];
+let training = false;
+let trainRng = makeRng(1);
+let currentConfig = null;
+
+// --- Parallel (data-parallel Web Worker) training state -- see src/worker_pool.js.
+// #chart is always used for the numWorkers=1 path (main-thread canvas, unchanged
+// from before this feature existed); #chartParallel is only ever transferred to
+// a Worker once (transferControlToOffscreen is one-way) and only shown in
+// parallel mode, precisely so the two modes can never interfere with each other. ---
+let pool = null;
+let chartWorkerHandle = null;
+let parallelMode = false;
+let parallelStepCount = 0;
+
+function sampleOneBatch(B, T) {
+  return Array.isArray(data) ? sampleDocBatch(data, B, T, trainRng) : sampleBatch(data, B, T, trainRng);
+}
+
+function readChartTheme() {
+  const style = getComputedStyle(document.querySelector(".viz-root"));
+  return {
+    grid: style.getPropertyValue("--grid").trim(),
+    baseline: style.getPropertyValue("--baseline").trim(),
+    series: style.getPropertyValue("--series-1").trim(),
+    muted: style.getPropertyValue("--text-muted").trim(),
+  };
+}
+
+// --- Run history: logs *results* (persisted across reloads), distinct from
+// the live status line / chart above, which only ever shows the *current*
+// run's state. Lets you compare mixer types / hyperparameters across
+// multiple init+train+generate cycles instead of losing each one. ---
+const HISTORY_KEY = "microlm_runHistory";
+const GEN_HISTORY_KEY = "microlm_genHistory";
+const MAX_HISTORY = 100;
+
+function loadJSON(key) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return []; // localStorage unavailable (private browsing, sandboxed context, etc.) -- degrade to in-memory only.
+  }
+}
+function saveJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* best-effort */ }
+}
+
+let runHistory = loadJSON(HISTORY_KEY);
+let genHistory = loadJSON(GEN_HISTORY_KEY);
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderHistory() {
+  const body = $("historyBody");
+  // All fields are escaped even though today's values are numbers/dropdown
+  // strings we control -- runHistory round-trips through localStorage, which
+  // any same-origin script (a browser extension, a bug elsewhere on this
+  // page in the future) could in principle write to, so treat it the same
+  // as any other untrusted data before it goes into innerHTML.
+  body.innerHTML = runHistory.slice().reverse().map((r) => `
+    <tr>
+      <td>${escapeHtml(r.time)}</td>
+      <td>${escapeHtml(r.mixer)}</td>
+      <td>${escapeHtml(`d=${r.dModel} L=${r.numLayers} H=${r.numHeads} ctx=${r.contextLen}`)}</td>
+      <td>${escapeHtml(r.params.toLocaleString())}</td>
+      <td>${escapeHtml(String(r.totalSteps))}</td>
+      <td>${escapeHtml(r.finalLoss.toFixed(4))}</td>
+      <td>${escapeHtml(r.durationSec.toFixed(1))}s</td>
+    </tr>`).join("");
+  $("historyEmptyNote").style.display = runHistory.length ? "none" : "block";
+}
+
+function renderGenHistory() {
+  const body = $("genHistoryBody");
+  body.innerHTML = genHistory.slice().reverse().map((r) => `
+    <tr>
+      <td>${escapeHtml(r.time)}</td>
+      <td>${escapeHtml(r.mixer)}</td>
+      <td title="${escapeHtml(r.prompt)}">${escapeHtml(r.prompt)}</td>
+      <td title="${escapeHtml(r.output)}">${escapeHtml(r.output.slice(0, 140))}${r.output.length > 140 ? "…" : ""}</td>
+    </tr>`).join("");
+  $("genHistoryEmptyNote").style.display = genHistory.length ? "none" : "block";
+}
+
+function logRunResult(entry) {
+  runHistory.push(entry);
+  if (runHistory.length > MAX_HISTORY) runHistory = runHistory.slice(-MAX_HISTORY);
+  saveJSON(HISTORY_KEY, runHistory);
+  renderHistory();
+}
+function logGenResult(entry) {
+  genHistory.push(entry);
+  if (genHistory.length > MAX_HISTORY) genHistory = genHistory.slice(-MAX_HISTORY);
+  saveJSON(GEN_HISTORY_KEY, genHistory);
+  renderGenHistory();
+}
+
+async function reportBackend() {
+  const backend = await getBackend();
+  if (backend) {
+    // Parity self-check: same random matmul on CPU and GPU should agree.
+    const M = 6, K = 5, N = 7;
+    const a = Float32Array.from({ length: M * K }, () => Math.random() * 2 - 1);
+    const b = Float32Array.from({ length: K * N }, () => Math.random() * 2 - 1);
+    const gpuOut = await gpuMatmul(backend, a, b, M, K, N, false, false);
+    const cpuOut = cpuMatmul(a, b, M, K, N, false, false);
+    let maxDiff = 0;
+    for (let i = 0; i < cpuOut.length; i++) maxDiff = Math.max(maxDiff, Math.abs(cpuOut[i] - gpuOut[i]));
+    $("backendLabel").textContent = "WebGPU (GPU-accelerated)";
+    log(`WebGPU backend available. CPU/GPU matmul parity check: max abs diff = ${maxDiff.toExponential(2)}`);
+  } else {
+    $("backendLabel").textContent = "CPU (WebGPU unavailable)";
+    log("WebGPU not available in this browser — falling back to pure-JS CPU matmul. Training will still work, just slower.");
+  }
+}
+
+async function initModel() {
+  const text = $("corpus").value;
+  if (text.length < 200) {
+    log("ERROR: training text should be at least a couple hundred characters for anything meaningful to happen.");
+    return;
+  }
+  const dModel = parseInt($("dModel").value, 10);
+  const numLayers = parseInt($("numLayers").value, 10);
+  const numHeads = parseInt($("numHeads").value, 10);
+  const contextLen = parseInt($("contextLen").value, 10);
+  const mixerType = $("mixerType").value;
+  const numWorkers = Math.max(1, parseInt($("numWorkers").value, 10) || 1);
+  if (dModel % numHeads !== 0) {
+    log(`ERROR: d_model (${dModel}) must be divisible by heads (${numHeads}).`);
+    return;
+  }
+
+  tokenizer = new CharTokenizer(text);
+  const documents = splitDocuments(text);
+  data = tokenizeDocuments(documents, tokenizer); // array of per-document Int32Arrays -- see src/dataset.js
+  const stats = corpusStats(data);
+  const eligibleDocs = data.filter((d) => d.length >= contextLen + 1).length;
+  $("corpusStats").textContent =
+    `${stats.numDocuments} stories, ${stats.totalTokens} chars total (avg ${stats.avgLength.toFixed(0)}, ` +
+    `range ${stats.minLength}-${stats.maxLength}). ${eligibleDocs}/${stats.numDocuments} long enough for context=${contextLen}.`;
+  if (eligibleDocs === 0) {
+    log(`ERROR: no story is long enough for context length ${contextLen} (need at least ${contextLen + 1} characters). Lower the context length or use longer stories.`);
+    return;
+  }
+
+  const config = { dModel, numLayers, numHeads, contextLen, mixerType, seed: Date.now() & 0xffff };
+  model = new MicroLM(tokenizer.vocabSize, config);
+  optimizer = new Adam(model.parameters(), { lr: parseFloat($("lr").value) });
+  lossHistory = [];
+  parallelStepCount = 0;
+  trainRng = makeRng(1);
+  currentConfig = { mixerType, dModel, numLayers, numHeads, contextLen, numWorkers };
+
+  if (pool) { pool.destroy(); pool = null; } // tear down any previous worker pool before possibly making a new one
+
+  $("trainBtn").disabled = true; // re-enabled once (re)init below finishes
+  if (numWorkers > 1) {
+    parallelMode = true;
+    $("chart").style.display = "none";
+    $("chartParallel").style.display = "block";
+    log(`Spawning ${numWorkers} training workers...`);
+    pool = new TrainingWorkerPool(numWorkers);
+    await pool.init(tokenizer.vocabSize, config);
+    if (!chartWorkerHandle) chartWorkerHandle = new ChartWorkerHandle($("chartParallel"), readChartTheme());
+    chartWorkerHandle.reset();
+    const B = parseInt($("batchSize").value, 10) || 1;
+    log(`${numWorkers} training workers ready. Effective batch = ${B} × ${numWorkers} = ${B * numWorkers}.`);
+  } else {
+    parallelMode = false;
+    $("chart").style.display = "block";
+    $("chartParallel").style.display = "none";
+    drawChart();
+  }
+
+  $("paramCount").textContent = model.paramCount().toLocaleString();
+  $("vocabSize").textContent = tokenizer.vocabSize;
+  $("stepLabel").textContent = "0";
+  $("lossLabel").textContent = "—";
+  $("trainBtn").disabled = false;
+  $("genBtn").disabled = false;
+  $("exportBtn").disabled = false;
+  log(`Model initialized: mixer=${mixerType}, d_model=${dModel}, layers=${numLayers}, heads=${numHeads}, context=${contextLen}, params=${model.paramCount()}, vocab=${tokenizer.vocabSize}, stories=${stats.numDocuments}, workers=${numWorkers}`);
+}
+
+async function trainLoop() {
+  const B = parseInt($("batchSize").value, 10);
+  const T = parseInt($("contextLen").value, 10);
+  const totalSteps = parseInt($("stepsPerClick").value, 10);
+  const gradClip = parseFloat($("gradClip").value) || 0;
+  $("trainBtn").disabled = true;
+  $("stopBtn").disabled = false;
+  training = true;
+  const t0 = performance.now();
+
+  if (parallelMode) {
+    await trainLoopParallel(totalSteps, B, T, t0, gradClip);
+  } else {
+    await trainLoopSingle(totalSteps, B, T, t0, gradClip);
+  }
+
+  training = false;
+  $("trainBtn").disabled = false;
+  $("stopBtn").disabled = true;
+}
+
+async function trainLoopSingle(totalSteps, B, T, t0, gradClip) {
+  for (let i = 0; i < totalSteps && training; i++) {
+    const loss = await trainStep(model, optimizer, data, B, T, trainRng, gradClip);
+    lossHistory.push(loss);
+    const step = lossHistory.length;
+    $("stepLabel").textContent = String(step);
+    $("lossLabel").textContent = loss.toFixed(4);
+    if (i % 5 === 0 || i === totalSteps - 1) {
+      drawChart();
+      // Yield to the browser so the UI (and the Stop button) stays responsive.
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+  drawChart();
+  const dt = (performance.now() - t0) / 1000;
+  const finalLoss = lossHistory[lossHistory.length - 1];
+  log(`Trained ${lossHistory.length ? "up to" : ""} step ${lossHistory.length} (this run: ${dt.toFixed(1)}s). Latest loss: ${finalLoss?.toFixed(4)}`);
+  if (currentConfig && finalLoss !== undefined) {
+    logRunResult({
+      time: new Date().toLocaleTimeString(),
+      mixer: currentConfig.mixerType,
+      dModel: currentConfig.dModel,
+      numLayers: currentConfig.numLayers,
+      numHeads: currentConfig.numHeads,
+      contextLen: currentConfig.contextLen,
+      params: model.paramCount(),
+      totalSteps: lossHistory.length,
+      finalLoss,
+      durationSec: dt,
+    });
+  }
+}
+
+async function trainLoopParallel(totalSteps, B, T, t0, gradClip) {
+  let finalLoss, stepsRun = 0;
+  for (let i = 0; i < totalSteps && training; i++) {
+    const batches = [];
+    for (let w = 0; w < pool.numWorkers; w++) batches.push(sampleOneBatch(B, T));
+    const avgLoss = await pool.step(model, batches, B, T); // fills model's param grads with the cross-worker average
+    if (gradClip > 0) clipGradNorm(model.parameters(), gradClip);
+    optimizer.step(); // same Adam instance/state as the single-threaded path -- only the gradient computation was parallelized
+    parallelStepCount++;
+    stepsRun++;
+    finalLoss = avgLoss;
+    $("stepLabel").textContent = String(parallelStepCount);
+    $("lossLabel").textContent = avgLoss.toFixed(4);
+    chartWorkerHandle.pushLoss(avgLoss);
+    if (i % 3 === 0) await new Promise((r) => setTimeout(r, 0)); // main thread barely does anything here, but still yield for the Stop button
+  }
+  const dt = (performance.now() - t0) / 1000;
+  log(`Trained ${stepsRun} parallel steps across ${pool.numWorkers} workers (this run: ${dt.toFixed(1)}s). Latest avg loss: ${finalLoss?.toFixed(4)}`);
+  if (currentConfig && finalLoss !== undefined) {
+    logRunResult({
+      time: new Date().toLocaleTimeString(),
+      mixer: `${currentConfig.mixerType} (×${pool.numWorkers} workers)`,
+      dModel: currentConfig.dModel,
+      numLayers: currentConfig.numLayers,
+      numHeads: currentConfig.numHeads,
+      contextLen: currentConfig.contextLen,
+      params: model.paramCount(),
+      totalSteps: parallelStepCount,
+      finalLoss,
+      durationSec: dt,
+    });
+  }
+}
+
+function drawChart() {
+  const canvas = $("chart");
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth || 600, h = canvas.clientHeight || 180;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  canvas._chartMeta = drawLossChart(ctx, w, h, lossHistory, readChartTheme());
+}
+
+// Hover crosshair + tooltip. Maps a rendered (possibly downsampled -- see
+// chart_utils.js) point back to its index in the full-resolution lossHistory
+// via meta.stride, so the tooltip's step number/value stay exact even once
+// the chart is drawing fewer points than there are recorded steps.
+const chartEl = $("chart"), tooltipEl = $("tooltip");
+chartEl.addEventListener("mousemove", (e) => {
+  const meta = chartEl._chartMeta;
+  if (!meta || lossHistory.length < 2) return;
+  const rect = chartEl.getBoundingClientRect();
+  const x = e.clientX - rect.left;
+  const pointIdx = Math.round(((x - meta.padL) / meta.plotW) * (meta.pointCount - 1));
+  const clampedPointIdx = Math.max(0, Math.min(meta.pointCount - 1, pointIdx));
+  const originalIdx = Math.max(0, Math.min(meta.fullLength - 1, Math.round(clampedPointIdx * meta.stride)));
+  const v = lossHistory[originalIdx];
+  const px = meta.padL + (meta.plotW * clampedPointIdx) / (meta.pointCount - 1);
+  tooltipEl.style.left = px + "px";
+  tooltipEl.style.top = "0px";
+  tooltipEl.style.opacity = "1";
+  tooltipEl.textContent = `step ${originalIdx + 1}: loss ${v.toFixed(4)}`;
+});
+chartEl.addEventListener("mouseleave", () => { tooltipEl.style.opacity = "0"; });
+
+async function generate() {
+  const promptStr = $("prompt").value || "";
+  const nTokens = parseInt($("genTokens").value, 10);
+  const temperature = parseFloat($("temp").value);
+  const topK = parseInt($("topK").value, 10);
+  $("genBtn").disabled = true;
+  try {
+    let promptIds;
+    try {
+      promptIds = tokenizer.encode(promptStr.length ? promptStr : " ");
+    } catch (err) {
+      log(`ERROR: ${err.message}`);
+      return;
+    }
+    const rng = makeRng(Date.now() & 0xffffffff);
+    const genIds = await model.generate(promptIds, nTokens, { temperature, topK, rng });
+    const genText = tokenizer.decode(genIds);
+    $("genOutput").textContent = promptStr + genText;
+    logGenResult({
+      time: new Date().toLocaleTimeString(),
+      mixer: currentConfig ? currentConfig.mixerType : "?",
+      prompt: promptStr,
+      output: genText,
+    });
+  } finally {
+    $("genBtn").disabled = false;
+  }
+}
+
+async function exportQuantized() {
+  if (!model) return;
+  $("exportBtn").disabled = true;
+  $("quantStatus").textContent = "Quantizing...";
+  try {
+    await new Promise(r => setTimeout(r, 10)); // Yield for UI
+    const qmodel = quantizeModel(model);
+    const buffer = serializeQuantized(qmodel);
+    const blob = new Blob([buffer], { type: "application/octet-stream" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `microlm_${currentConfig.mixerType}_d${currentConfig.dModel}_l${currentConfig.numLayers}.qlm1`;
+    a.click();
+    URL.revokeObjectURL(url);
+    $("quantStatus").textContent = "Exported!";
+    log(`Exported quantized model: ${(buffer.byteLength / 1024 / 1024).toFixed(2)} MB`);
+  } catch (err) {
+    log(`ERROR exporting: ${err.message}`);
+    $("quantStatus").textContent = "Failed.";
+  } finally {
+    $("exportBtn").disabled = false;
+  }
+}
+
+$("importBtn").addEventListener("click", () => $("importFile").click());
+$("importFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  $("quantStatus").textContent = "Loading...";
+  try {
+    const buffer = await file.arrayBuffer();
+    const qmodel = deserializeQuantized(buffer);
+    model = qmodel;
+    currentConfig = qmodel.config;
+    // We assume the user has hit 'init' once to build the tokenizer, or we build a default one.
+    if (!tokenizer) {
+      tokenizer = new CharTokenizer($("corpus").value);
+    }
+    $("paramCount").textContent = "Quantized";
+    $("vocabSize").textContent = tokenizer.vocabSize;
+    $("stepLabel").textContent = "—";
+    $("lossLabel").textContent = "—";
+    $("trainBtn").disabled = true; // can't train a quantized model
+    $("exportBtn").disabled = false;
+    $("genBtn").disabled = false;
+    $("quantStatus").textContent = "Loaded!";
+    log(`Loaded quantized model: mixer=${currentConfig.mixerType}, d_model=${currentConfig.dModel}, layers=${currentConfig.numLayers}`);
+  } catch (err) {
+    log(`ERROR loading: ${err.message}`);
+    $("quantStatus").textContent = "Failed.";
+  }
+  $("importFile").value = ""; // reset
+});
+
+$("initBtn").addEventListener("click", () => { $("initBtn").disabled = true; initModel().finally(() => { $("initBtn").disabled = false; }); });
+$("trainBtn").addEventListener("click", () => trainLoop());
+$("stopBtn").addEventListener("click", () => { training = false; });
+$("genBtn").addEventListener("click", () => generate());
+$("exportBtn").addEventListener("click", () => exportQuantized());
+$("clearHistoryBtn").addEventListener("click", () => { runHistory = []; saveJSON(HISTORY_KEY, runHistory); renderHistory(); });
+$("clearGenHistoryBtn").addEventListener("click", () => { genHistory = []; saveJSON(GEN_HISTORY_KEY, genHistory); renderGenHistory(); });
+window.addEventListener("resize", () => {
+  if (parallelMode && chartWorkerHandle) chartWorkerHandle.resize();
+  else drawChart();
+});
+
+renderHistory();
+renderGenHistory();
+reportBackend();
+log("Ready. Edit the training text if you like, then click \"Initialize / reset model\" to build the tokenizer + model, then \"Train\".");
+</script>
+</body>
+</html>
